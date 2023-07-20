@@ -26,6 +26,9 @@ sys.stderr = open(r'error.log', 'a')
 
 # add the webdriver manager of chrome to PATH
 os.environ['PATH'] += r'C:\Users\scorb\OneDrive\Documents\GitHub\Practice\selenium course\drivers'
+i = 1
+error_counter = 0
+quit_error = 0
 
 # open the file of login info
 handle = open(r'd:\Work\code\files\python\info_of_usage_app.txt','r')
@@ -35,67 +38,87 @@ storage = handle.readline()
 user_name = re.search(r'.+\-' , storage).group()[:-1]
 password = re.search(r'\-.+' , storage).group()[1:]
 
+handle.close()
 
-def close_all():
-    # function to close all instances
-    global driver
-    driver.close()
-    handle.close()
-    root.quit()
+def click_open():
+    global i 
+    global error_counter 
+    error_counter = 0
+    i = 1
+    open_fun()
+
     
 def open_fun():
+    global i
+    global error_counter
     # the main function of the app
     try:
-        # the connection to the database
-        db = sqlite3.connect(r'data.db')
-        cursor = db.cursor()
-        cursor.execute('create table if not exists data (day text , time text , usage text, state text)')
+        if i == 1 :
+            # initial values to the window labels
+            usage_label.config(text='# Usage')
+            remaining_label.config(text='# Remaining')
+            current_state.config(text='# State')
+            # intiation of the webdriver
+            global driver
+            driver = webdriver.Chrome(options=chrome_options)
+            # driver = webdriver.Chrome()
+            driver.implicitly_wait(5)
+            # the website to scrap
+            driver.get(r'https://my.te.eg/user/login')
+            i = 2
+
+        if i == 2 :
+            # insertion of the user_name
+            user = driver.find_element(by='id', value='login-service-number-et')
+            user.send_keys(user_name)
+            i = 3
         
-        # initial values to the window labels
-        usage_label.config(text='# Usage')
-        remaining_label.config(text='# Remaining')
-        current_state.config(text='# State')
-        # intiation of the webdriver
-        global driver
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.implicitly_wait(15)
-        # the website to scrap
-        driver.get(r'https://my.te.eg/user/login')
+        if i == 3 :
+            # insertion of the password
+            pass_word = driver.find_element(by=By.ID, value='login-password-et')
+            pass_word.send_keys(password)
+            i = 4
 
-        # insertion of the user_name
-        user = driver.find_element(by='id', value='login-service-number-et')
-        user.send_keys(user_name)
+        if i == 4 :
+            # selection of an item of the list
+            list_options = driver.find_element(by=By.NAME, value='numberType')
+            list_options.click()
+            i = 5
         
-        # insertion of the password
-        pass_word = driver.find_element(by=By.ID, value='login-password-et')
-        pass_word.send_keys(password)
+        if i == 5 :
+            internet = driver.find_element(by=By.CSS_SELECTOR, value='[aria-label="Internet"]')
+            internet.click()
+            i = 6
 
-        # selection of an item of the list
-        list_options = driver.find_element(by=By.NAME, value='numberType')
-        list_options.click()
-        
-        internet = driver.find_element(by=By.CSS_SELECTOR, value='[aria-label="Internet"]')
-        internet.click()
+        if i == 6 :
+            # login click
+            login = driver.find_element(by=By.ID,value='login-login-btn')
+            login.click()
+            i = 7
 
-        # login click
-        login = driver.find_element(by=By.ID,value='login-login-btn')
-        login.click()
+        if i == 7 :
+            # select and get the quota 
+            usage_return = driver.find_element(by=By.CSS_SELECTOR, value='[class="usage"]') # usage
+            usage_text = re.search(r'[0-9]+\.[0-9]+',usage_return.text)
+            usage = usage_text.group()
+            i = 8
 
-        # select and get the quota 
-        usage_return = driver.find_element(by=By.CSS_SELECTOR, value='[class="remaining-details ng-star-inserted"]') # usage
-        usage_text = re.search(r'[0-9]+\.[0-9]+',usage_return.text)
-        usage = usage_text.group()
+        if i == 8 :
+            text_click = driver.find_element(by=By.CSS_SELECTOR, value='[class="text-black underline"]')
+            text_click.click()
+            i = 9
 
-        text_click = driver.find_element(by=By.CSS_SELECTOR, value='[class="text-black underline"]')
-        text_click.click()
+        if i == 9 :
+            # select and get of the remaining days
+            remaining_days_return = driver.find_element(by=By.CSS_SELECTOR, value='[class="mr-auto"]') # remaining_days
+            remaining_days_return_text = re.search(r' [0-9] ', remaining_days_return.text).group()
+            remaining_days = remaining_days_return_text #.group()
+            i = 10
 
-        # select and get of the remaining days
-        remaining_days_return = driver.find_element(by=By.CSS_SELECTOR, value='[class="mr-auto"]') # remaining_days
-        remaining_days_return_text = re.search(r' [0-9] ', remaining_days_return.text).group()
-        remaining_days = remaining_days_return_text #.group()
-
-        # calculation of the quota state
-        state = float(usage) - (140/30)*int(remaining_days)
+        if i == 10 :
+            driver.close()
+            # calculation of the quota state
+            state = float(usage) - (140/30)*int(remaining_days)
         
         # selection of labels colors depends on the state 
         if state > 0:
@@ -116,11 +139,21 @@ def open_fun():
 
         current_state.config(text='State is: '+str(state)[0:5],background=detector_usage)
     except:
+        if error_counter == 15:
+            click_open()
+        if quit_error == 45:
+            root.quit()
         # error handling by recalling the main function
         print('error occured\n')
+        error_counter += 1
+        quit_error += 1
         open_fun()
         
     finally:
+        # the connection to the database
+        db = sqlite3.connect(r'data.db')
+        cursor = db.cursor()
+        cursor.execute('create table if not exists data (day text , time text , usage text, state text)')
         # insertion of the process date, time and values into the database
         cursor.execute(f'''insert into data values (
                        "{datetime.datetime.now().date()}" ,
@@ -138,11 +171,11 @@ root.iconbitmap(r'download.ico')
 root.minsize(326,226)
 
 # open button with function open_fun
-open_btn = Button(root,text='Open',command=open_fun, font=('arial',20),activebackground='#dbedff')
+open_btn = Button(root,text='Open',command=click_open, font=('arial',20),activebackground='#dbedff')
 open_btn.grid(row=0,column=0,sticky=W+E)
 
 # close all button with function close_all
-close_all = Button(root, text='Close All',command=close_all, font=('arial',20),activebackground='#dbedff')
+close_all = Button(root, text='Close All',command=root.quit, font=('arial',20),activebackground='#dbedff')
 close_all.grid(row=5,column=0,sticky=W+E)
 
 # label to display quota usage
